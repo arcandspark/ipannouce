@@ -31,7 +31,7 @@ func main() {
 	flag.StringVar(&group_str, "group", "ff15::793e:287a", "multicast group")
 	flag.Uint64Var(&solport, "solport", 5190, "solicitor port")
 	flag.Uint64Var(&annport, "annport", 5190, "announcer port")
-	flag.StringVar(&selector_ip_str, "selector", "", "interface address most like this address will be used to transmit annoucement")
+	flag.StringVar(&selector_ip_str, "selector", "", "interface address most like this address will be used to transmit solicitation")
 	flag.StringVar(&if_pat_str, "ifpat", "", "regex pattern that interface name must match to have any of its addresses selected")
 	flag.Parse()
 
