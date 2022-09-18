@@ -3,11 +3,15 @@ package ipannounce
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
+	"log/syslog"
 	"math/bits"
 	"net"
 	"regexp"
 	"strings"
 )
+
+var logg *syslog.Writer
 
 /* Select a host IP for an ipannounce packet.
  * This function will iterate over the host's interfaces for IPs to evaluate.
@@ -97,4 +101,34 @@ func SelectMatchingIP(selector_ip net.IP, if_pat *regexp.Regexp) (net.IP, error)
 	}
 
 	return best_match_ip, nil
+}
+
+func LogSetup() {
+	var err error
+	logg, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "ipannounce")
+	if err != nil {
+		LogErrorf("failed to setup syslog: %v", err)
+	}
+}
+
+func LogErrorf(format string, a ...any) {
+	msg := fmt.Sprintf(format, a)
+	var err error
+	if logg != nil {
+		err = logg.Err(msg)
+	}
+	if logg == nil || err != nil {
+		log.Default().Printf("ERROR %v", msg)
+	}
+}
+
+func LogInfof(format string, a ...any) {
+	msg := fmt.Sprintf(format, a)
+	var err error
+	if logg != nil {
+		err = logg.Info(msg)
+	}
+	if logg == nil || err != nil {
+		log.Default().Printf("INFO %v", msg)
+	}
 }

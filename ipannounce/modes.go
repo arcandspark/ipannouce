@@ -53,36 +53,38 @@ func Announcer(listen_addr string, group_ip net.IP) error {
 		if err != nil {
 			return fmt.Errorf("error reading from PacketConn: %v", err)
 		}
-		fmt.Printf("Message from %v\n%v\n", src.String(), string(b[:n]))
+		LogInfof("Message from %v", src.String())
+		LogInfof("%v", string(b[:n]))
 
 		// Parse the message, it should be JSON
 		var s Solicitation
 		err = json.Unmarshal(b[:n], &s)
 		if err != nil {
-			fmt.Printf("error parsing message json: %v\n", err)
+			LogErrorf("error parsing message json: %v", err)
 			continue
 		}
 
 		// Validate the data in the solicitation
 		inform_ip := net.ParseIP(s.Inform)
 		if inform_ip == nil {
-			fmt.Printf("message inform IP could not be parsed: %v\n", s.Inform)
+			LogErrorf("message inform IP could not be parsed: %v", s.Inform)
 			continue
 		}
 		if inform_ip.To4() != nil {
-			fmt.Printf("message inform IP was not IPv6: %v\n", s.Inform)
+			LogErrorf("message inform IP was not IPv6: %v", s.Inform)
 			continue
 		}
 
 		// Figure out what IP to respond with, and prepare the response
 		response_ip, err := SelectMatchingIP(inform_ip, nil)
 		if err != nil {
-			fmt.Printf("unable to select matching host ip: %v", err)
+			LogErrorf("unable to select matching host ip: %v", err)
+			continue
 		}
 
 		hostname, err := os.Hostname()
 		if err != nil || hostname == "" {
-			fmt.Println("unable to get hostname")
+			LogErrorf("unable to get hostname")
 			continue
 		}
 
@@ -92,25 +94,25 @@ func Announcer(listen_addr string, group_ip net.IP) error {
 		}
 		response_buf, err := json.Marshal(response)
 		if err != nil {
-			fmt.Printf("error marshalling response object: %v\n", err)
+			LogErrorf("error marshalling response object: %v\n", err)
 			continue
 		}
 		if len(response_buf) > 1400 {
-			fmt.Printf("warning, length of response is %v bytes", len(response_buf))
+			LogErrorf("warning, length of response is %v bytes", len(response_buf))
 		}
-		fmt.Printf("Response:\n%v\n", string(response_buf))
+		LogInfof("Response:\n%v\n", string(response_buf))
 
 		// Send the response datagram
 		dest_str := net.JoinHostPort(inform_ip.String(), fmt.Sprint(s.ResponsePort))
 		resp_conn, err := net.Dial("udp", dest_str)
 		if err != nil {
-			fmt.Printf("error opening socket to %v: %v\n", dest_str, err)
+			LogErrorf("error opening socket to %v: %v\n", dest_str, err)
 			continue
 		}
 		// resp_conn.SetDeadline(time.Now().Add(1 * time.Second))
 		_, err = resp_conn.Write(response_buf)
 		if err != nil {
-			fmt.Printf("error writing response to socket: %v\n", err)
+			LogErrorf("error writing response to socket: %v\n", err)
 		}
 		resp_conn.Close()
 	}

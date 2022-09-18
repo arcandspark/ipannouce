@@ -76,10 +76,12 @@ func main() {
 		}
 	}
 
+	// Prepare some addr:port strings suitable for Dial/Listen
 	sol_listen_addr := net.JoinHostPort("::", fmt.Sprint(solport))
 	ann_listen_addr := net.JoinHostPort("::", fmt.Sprint(annport))
 
 	if mode == "sol" {
+		// Solicitor mode - select and inform IP and call solicitor logic
 		inform_ip, err := ipannounce.SelectMatchingIP(selector_ip, if_pat)
 		if err != nil {
 			log.Fatalf("error selecting source IP: %v", err)
@@ -96,12 +98,14 @@ func main() {
 			fmt.Printf("error in solicitor: %v\n", err)
 		}
 	} else if mode == "ann" {
-		fmt.Printf("Announcer listening on %v\n", ann_listen_addr)
-		fmt.Printf("Announcer joining group %v\n", group_ip.String())
+		// Announcer Mode - configure syslog and call announcer logic
+		ipannounce.LogSetup()
+		ipannounce.LogInfof("Announcer listening on %v\n", ann_listen_addr)
+		ipannounce.LogInfof("Announcer joining group %v\n", group_ip.String())
 
 		err := ipannounce.Announcer(ann_listen_addr, group_ip)
 		if err != nil {
-			fmt.Printf("error in announcer: %v\n", err)
+			ipannounce.LogErrorf("error in announcer: %v\n", err)
 		}
 	}
 }
