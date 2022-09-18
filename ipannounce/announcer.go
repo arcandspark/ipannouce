@@ -1,100 +1,116 @@
 package ipannounce
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	"math/bits"
 	"net"
-	"regexp"
-	"strings"
+	"os"
+
+	"golang.org/x/net/ipv6"
 )
 
-/* Select a source IP for an ipannounce packet.
- * This function will iterate over the host's interfaces for IPs to evaluate.
- *
- * if_pat is a Rexexp that, if provided, will be used to test each interface name.
- * Interfaces whose name's do NOT match if_pat will not have any of their
- * addresses evaluated.
- *
- * selector_ip is an IPv6 address which will be bitwise compared to each
- * host IP address which is evaluated.
- *
- * The host IP address which, when compared to selector_ip, has the most consecutive
- * matching bits starting with the MSB will be returned as the selected source IP.
- *
- * NOTE: This function ONLY compares the most significant 64 bits of each address to
- * the selector_ip.
- *
- * Example:
- * selector_ip    = fc00::
- * candidate IP A = fd35:a2b9:543c:10aa::20
- * candidate IP B = 2605:4415:92bc:115f::20
- *
- * (for readability, only the most significant 32 bits are shown in this example)
- * selector IP    = 1111 1100 0000 0000 0000 0000 0000 0000
- * candidate IP A = 1111 1101 0011 0101 1010 0010 1011 1001
- * candidate IP B = 0010 0110 0000 0101 0100 0100 0001 0101
- *
- * As can be easily seen in binary above, candidate IP A has 7 consecutive matching bits
- * with the selector_ip starting from the MSB. candidate IP B has none. Given this selector,
- * candidate IP A will be returned.
- *
- * The selector_ip can be more specific than shown, and the full first 64 bits will be evaluated.
- * This can be useful for hosts with multiple GUAs or ULAs with different prefixes.
- */
-func SelectSourceIP(selector_ip net.IP, if_pat *regexp.Regexp) (net.IP, error) {
+// Join the specified multicast group address with
+// all interfaces on this host that are not "lo"
+func JoinGroup(pc *ipv6.PacketConn, group *net.UDPAddr) error {
 	iflist, err := net.Interfaces()
 	if err != nil {
-		return nil, fmt.Errorf("error getting interface list: %v", err)
+		return fmt.Errorf("error listing interfaces: %v", err)
 	}
-
-	// Track most matched bits and the IP that matched that many from the loop below
-	// These will be updated when a better match is found
-	most_matched_bits := 0
-	var best_match_ip net.IP = nil
-	selector_netpart := binary.BigEndian.Uint64(selector_ip[:8])
 
 	for i := range iflist {
-		if if_pat != nil { // if_pat was provided
-			if !if_pat.MatchString(iflist[i].Name) {
-				continue
+		if iflist[i].Name != "lo" {
+			if err := pc.JoinGroup(&iflist[i], group); err != nil {
+				return fmt.Errorf("error joining %v to group %v: %v",
+					iflist[i].Name, group.IP.String(), err)
 			}
-		}
-
-		addrlist, err := iflist[i].Addrs()
-		if err != nil {
-			return nil, fmt.Errorf("ERROR getting addresses for interface %v: %v", iflist[i].Name, err)
-		}
-
-		for j := range addrlist {
-			// Addresses returned by Interface.Addrs will have prefix bits on the end of them
-			// Example: fd00::1/64
-			// net.ParseIP will not parse an IP in a string string with the prefix bits at the end
-			// so we strip that off
-			addr_parts := strings.Split(addrlist[j].String(), "/")
-			if len(addr_parts) < 2 {
-				return nil, fmt.Errorf("ERROR Addr split into fewer than two parts on /: %v", addrlist[j].String())
-			}
-
-			ifip := net.ParseIP(addr_parts[0])
-			if ifip == nil {
-				return nil, fmt.Errorf("ERROR could not parse IP: %v", addr_parts[0])
-			}
-
-			// I only want to work on IPv6 addresses
-			// Sorry Dave, there is no support for your old addressing scheme from the tiny Internet
-			if ifip.To4() == nil {
-				for b := 0; b < 16; b++ {
-					ifip_netpart := binary.BigEndian.Uint64(ifip[:8])
-					matching_bits := bits.LeadingZeros64(selector_netpart ^ ifip_netpart)
-					if matching_bits > most_matched_bits {
-						best_match_ip = ifip
-						most_matched_bits = matching_bits
-					}
-				}
-			} // else it was an IPv4 address, do nothing with it
 		}
 	}
 
-	return best_match_ip, nil
+	return nil
+}
+
+func Announcer(listen_addr string, group_ip net.IP) error {
+	c, err := net.ListenPacket("udp6", listen_addr)
+	if err != nil {
+		return fmt.Errorf("error listening on %v: %v", listen_addr, err)
+	}
+	defer c.Close()
+
+	pc := ipv6.NewPacketConn(c)
+	err = JoinGroup(pc, &net.UDPAddr{IP: group_ip})
+	if err != nil {
+		return err
+	}
+
+	b := make([]byte, 1500)
+
+	// BEGIN - Receive Solicitations Loop
+	for {
+		// Read a datagram from the socket
+		n, _, src, err := pc.ReadFrom(b)
+		if err != nil {
+			return fmt.Errorf("error reading from PacketConn: %v", err)
+		}
+		fmt.Printf("Message from %v\n%v\n", src.String(), string(b[:n]))
+
+		// Parse the message, it should be JSON
+		var s Solicitation
+		err = json.Unmarshal(b[:n], &s)
+		if err != nil {
+			fmt.Printf("error parsing message json: %v\n", err)
+			continue
+		}
+
+		// Validate the data in the solicitation
+		inform_ip := net.ParseIP(s.Inform)
+		if inform_ip == nil {
+			fmt.Printf("message inform IP could not be parsed: %v\n", s.Inform)
+			continue
+		}
+		if inform_ip.To4() != nil {
+			fmt.Printf("message inform IP was not IPv6: %v\n", s.Inform)
+			continue
+		}
+
+		// Figure out what IP to respond with, and prepare the response
+		response_ip, err := SelectMatchingIP(inform_ip, nil)
+		if err != nil {
+			fmt.Printf("unable to select matching host ip: %v", err)
+		}
+
+		hostname, err := os.Hostname()
+		if err != nil || hostname == "" {
+			fmt.Println("unable to get hostname")
+			continue
+		}
+
+		response := Response{
+			IPStr:    response_ip.String(),
+			Hostname: hostname,
+		}
+		response_buf, err := json.Marshal(response)
+		if err != nil {
+			fmt.Printf("error marshalling response object: %v\n", err)
+			continue
+		}
+		if len(response_buf) > 1400 {
+			fmt.Printf("warning, length of response is %v bytes", len(response_buf))
+		}
+		fmt.Printf("Response:\n%v\n", string(response_buf))
+
+		// Send the response datagram
+		dest_str := net.JoinHostPort(inform_ip.String(), fmt.Sprint(s.ResponsePort))
+		resp_conn, err := net.Dial("udp", dest_str)
+		if err != nil {
+			fmt.Printf("error opening socket to %v: %v\n", dest_str, err)
+			continue
+		}
+		// resp_conn.SetDeadline(time.Now().Add(1 * time.Second))
+		_, err = resp_conn.Write(response_buf)
+		if err != nil {
+			fmt.Printf("error writing response to socket: %v\n", err)
+		}
+		resp_conn.Close()
+	}
+	// END - Receive Solicitations Loop
 }
