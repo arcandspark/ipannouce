@@ -20,13 +20,20 @@ Modes:
 * ann - announcer, sends own IP and hostname info back to solicitors
 
 ```
-ipannouce -mode <sol|ann>      \
-    -group <multicast_addr>    \
-    -solport <solicitor_port>  \
-    -annport <announcer_port>  \
+ipannouce -mode <sol|ann>        # operation mode
+    [-group <multicast_addr>]    # multicast group, default ff15::793e:287a
+    [-solport <solicitor_port>]  # port solicitor listens on, default 5190
+    [-annport <announcer_port>]  # port announcer listens on, default 5190
     [mode specific options]
 ```
-Mode specific options for **solicitor**
+
+**solicitor mode options**
+
+```
+    -selector <ip_address>       # required - an address used to select the solicitor's address
+    [-ifpat <regex>]             # solicitor interface name must match this to be selected
+```
+
 
 ## Communication Flow
 
