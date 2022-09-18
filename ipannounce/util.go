@@ -112,7 +112,7 @@ func LogSetup() {
 }
 
 func LogErrorf(format string, a ...any) {
-	msg := fmt.Sprintf(format, a)
+	msg := fmt.Sprintf(format, a...)
 	var err error
 	if logg != nil {
 		err = logg.Err(msg)
@@ -123,7 +123,7 @@ func LogErrorf(format string, a ...any) {
 }
 
 func LogInfof(format string, a ...any) {
-	msg := fmt.Sprintf(format, a)
+	msg := fmt.Sprintf(format, a...)
 	var err error
 	if logg != nil {
 		err = logg.Info(msg)
