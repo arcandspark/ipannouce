@@ -17,7 +17,7 @@ import (
 // ff15:0000:0000:0000:0000:0000:793e:287a
 // ^^---------------------------------------multicast
 //	 ^--------------------------------------0 reserved, 0 rendezvous, 0 prefix, 1 transient
-//	  ^-------------------------------------link-local scope, don't route
+//	  ^-------------------------------------site-local
 //	    ^^^^--------------------------------future flags, reserved, plen, all 0s
 //	         ^^^^ ^^^^ ^^^^ ^^^^------------64bit network
 //	                             ^^^^ ^^^^--32bit group, choosen randomly
