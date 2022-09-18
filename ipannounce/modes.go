@@ -153,11 +153,18 @@ func Solicitor(listen_addr string, inform_ip net.IP, group_ip net.IP, annport ui
 	for time.Now().Before(end_listen) {
 		// Read a datagram from the socket
 		c.SetReadDeadline(time.Now().Add(10 * time.Second))
-		n, src, err := c.ReadFrom(b)
+		n, _, _ := c.ReadFrom(b)
+		// TODO - can we catch err above and determine if it is a timeout?
+		// knowing golang the answer is probably look for the work "timeout" in the error string
+
+		var resp Response
+		err = json.Unmarshal(b[:n], &resp)
 		if err != nil {
-			return fmt.Errorf("error reading from PacketConn: %v", err)
+			fmt.Printf("error parsing message json: %v\n", err)
+			continue
 		}
-		fmt.Printf("Message from %v\n%v\n", src.String(), string(b[:n]))
+
+		fmt.Printf("%16v%v", resp.Hostname, resp.IPStr)
 	}
 
 	return nil
