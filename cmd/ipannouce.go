@@ -23,8 +23,6 @@ import (
 //	                             ^^^^ ^^^^--32bit group, choosen randomly
 
 func main() {
-	fmt.Println("Announce IPv6 address with hostname")
-
 	var mode, group_str, selector_ip_str, if_pat_str string
 	var solport, annport uint64
 	flag.StringVar(&mode, "mode", "ann", "operation mode")
