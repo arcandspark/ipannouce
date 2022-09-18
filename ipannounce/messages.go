@@ -5,7 +5,7 @@ type Solicitation struct {
 	// Also, the IP which will be used to select the announced IP.
 	Inform string `json:"inform"`
 	// UDP port to which the response should be sent
-	ResponsePort uint `json:"response_port"`
+	ResponsePort uint64 `json:"response_port"`
 }
 
 type Response struct {

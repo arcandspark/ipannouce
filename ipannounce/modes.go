@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"time"
 
 	"golang.org/x/net/ipv6"
 )
@@ -113,4 +115,50 @@ func Announcer(listen_addr string, group_ip net.IP) error {
 		resp_conn.Close()
 	}
 	// END - Receive Solicitations Loop
+}
+
+func Solicitor(listen_addr string, inform_ip net.IP, group_ip net.IP, annport uint64) error {
+	c, err := net.ListenPacket("udp6", listen_addr)
+	if err != nil {
+		return fmt.Errorf("error listening on %v: %v", listen_addr, err)
+	}
+	defer c.Close()
+
+	// Prepare solicitation message
+	_, response_port_str, _ := net.SplitHostPort(listen_addr)
+	response_port, _ := strconv.ParseUint(response_port_str, 10, 64)
+	sol := Solicitation{
+		Inform:       inform_ip.String(),
+		ResponsePort: response_port,
+	}
+	sol_buf, err := json.Marshal(sol)
+	if err != nil {
+		return fmt.Errorf("error marshalling solicitation object: %v", err)
+	}
+
+	// Send message to the group
+	group_dst := net.JoinHostPort(group_ip.String(), fmt.Sprint(annport))
+	gc, err := net.Dial("udp", group_dst)
+	if err != nil {
+		return fmt.Errorf("error dialing group %v: %v", group_dst, err)
+	}
+	// gc.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	_, err = gc.Write(sol_buf)
+	if err != nil {
+		return fmt.Errorf("error sending solicitation to group: %v", err)
+	}
+
+	b := make([]byte, 1500)
+	end_listen := time.Now().Add(10 * time.Second)
+	for time.Now().Before(end_listen) {
+		// Read a datagram from the socket
+		c.SetReadDeadline(time.Now().Add(10 * time.Second))
+		n, src, err := c.ReadFrom(b)
+		if err != nil {
+			return fmt.Errorf("error reading from PacketConn: %v", err)
+		}
+		fmt.Printf("Message from %v\n%v\n", src.String(), string(b[:n]))
+	}
+
+	return nil
 }

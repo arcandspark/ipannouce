@@ -26,11 +26,11 @@ func main() {
 	fmt.Println("Announce IPv6 address with hostname")
 
 	var mode, group_str, selector_ip_str, if_pat_str string
-	var solport, annport uint
+	var solport, annport uint64
 	flag.StringVar(&mode, "mode", "ann", "operation mode")
 	flag.StringVar(&group_str, "group", "ff15::793e:287a", "multicast group")
-	flag.UintVar(&solport, "solport", 5190, "solicitor port")
-	flag.UintVar(&annport, "annport", 5190, "announcer port")
+	flag.Uint64Var(&solport, "solport", 5190, "solicitor port")
+	flag.Uint64Var(&annport, "annport", 5190, "announcer port")
 	flag.StringVar(&selector_ip_str, "selector", "", "interface address most like this address will be used to transmit annoucement")
 	flag.StringVar(&if_pat_str, "ifpat", "", "regex pattern that interface name must match to have any of its addresses selected")
 	flag.Parse()
@@ -92,9 +92,18 @@ func main() {
 
 		fmt.Printf("Running as solicitor using address %v\n", inform_ip)
 		fmt.Printf("Solicitor listening on %v\n", sol_listen_addr)
+
+		err = ipannounce.Solicitor(sol_listen_addr, inform_ip, group_ip, annport)
+		if err != nil {
+			fmt.Printf("error in solicitor: %v\n", err)
+		}
 	} else if mode == "ann" {
 		fmt.Printf("Announcer listening on %v\n", ann_listen_addr)
 		fmt.Printf("Announcer joining group %v\n", group_ip.String())
-		ipannounce.Announcer(ann_listen_addr, group_ip)
+
+		err := ipannounce.Announcer(ann_listen_addr, group_ip)
+		if err != nil {
+			fmt.Printf("error in announcer: %v\n", err)
+		}
 	}
 }
