@@ -16,11 +16,11 @@ import (
 // Default multicast IP selection method:
 // ff15:0000:0000:0000:0000:0000:793e:287a
 // ^^---------------------------------------multicast
-//	 ^--------------------------------------0 reserved, 0 rendezvous, 0 prefix, 1 transient
-//	  ^-------------------------------------site-local
-//	    ^^^^--------------------------------future flags, reserved, plen, all 0s
-//	         ^^^^ ^^^^ ^^^^ ^^^^------------64bit network
-//	                             ^^^^ ^^^^--32bit group, choosen randomly
+//   ^--------------------------------------0 reserved, 0 rendezvous, 0 prefix, 1 transient
+//    ^-------------------------------------site-local
+//      ^^^^--------------------------------future flags, reserved, plen, all 0s
+//           ^^^^ ^^^^ ^^^^ ^^^^------------64bit network
+//                               ^^^^ ^^^^--32bit group, choosen randomly
 
 func main() {
 	var mode, group_str, selector_ip_str, if_pat_str string
